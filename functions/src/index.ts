@@ -3,14 +3,28 @@ import * as admin from "firebase-admin";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import cors = require("cors");
 
+admin.initializeApp();
+
+// ★ CORS: Vercel本番を許可
 const corsHandler = cors({
-    origin: true,
+    origin: ["https://mimamori-web-ten.vercel.app"],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type"],
+    optionsSuccessStatus: 204,
 });
 
-
-admin.initializeApp();
+// ★ withCors: preflight(OPTIONS) を必ず返す
+function withCors(handler: (req: any, res: any) => Promise<void> | void) {
+    return (req: any, res: any) => {
+        corsHandler(req, res, () => {
+            if (req.method === "OPTIONS") {
+                res.status(204).send("");
+                return;
+            }
+            return handler(req, res);
+        });
+    };
+}
 
 /** JSTの日付キー（YYYY-MM-DD） */
 function getDateKeyJST(): string {
@@ -33,17 +47,8 @@ async function requireAuth(req: any): Promise<string> {
 }
 
 /** POST /checkin（今日も無事ボタン） */
-export const checkin = onRequest((req, res) => {
-    // ★ preflight 対応
-    if (req.method === "OPTIONS") {
-        res.set("Access-Control-Allow-Origin", "*");
-        res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-        res.set("Access-Control-Allow-Headers", "Authorization,Content-Type");
-        res.status(204).send("");
-        return;
-    }
-
-    corsHandler(req, res, async () => {
+export const checkin = onRequest(
+    withCors(async (req, res) => {
         try {
             if (req.method !== "POST") {
                 res.status(405).send("Method Not Allowed");
@@ -71,19 +76,12 @@ export const checkin = onRequest((req, res) => {
         } catch (e: any) {
             res.status(401).json({ ok: false, error: e.message ?? String(e) });
         }
-    });
-});
+    })
+);
 
 /** GET /status（今日押した？確認用） */
-export const status = onRequest((req, res) => {
-    if (req.method === "OPTIONS") {
-        res.set("Access-Control-Allow-Origin", "*");
-        res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-        res.set("Access-Control-Allow-Headers", "Authorization,Content-Type");
-        res.status(204).send("");
-        return;
-    }
-    corsHandler(req, res, async () => {
+export const status = onRequest(
+    withCors(async (req, res) => {
         try {
             if (req.method !== "GET") {
                 res.status(405).send("Method Not Allowed");
@@ -114,5 +112,5 @@ export const status = onRequest((req, res) => {
         } catch (e: any) {
             res.status(401).json({ ok: false, error: e.message ?? String(e) });
         }
-    });
-});
+    })
+);
