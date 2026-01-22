@@ -1,6 +1,9 @@
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import cors from "cors";
+
+const corsHandler = cors({ origin: true });
 
 admin.initializeApp();
 
@@ -25,67 +28,70 @@ async function requireAuth(req: any): Promise<string> {
 }
 
 /** POST /checkin（今日も無事ボタン） */
-export const checkin = onRequest(async (req, res) => {
-    try {
-        if (req.method !== "POST") {
-            res.status(405).send("Method Not Allowed");
-            return;
+export const checkin = onRequest((req, res) => {
+    corsHandler(req, res, async () => {
+        try {
+            if (req.method !== "POST") {
+                res.status(405).send("Method Not Allowed");
+                return;
+            }
+
+            const uid = await requireAuth(req);
+            const dateKey = getDateKeyJST();
+
+            const db = getFirestore();
+            const ref = db.doc(`users/${uid}/checkins/${dateKey}`);
+            const snap = await ref.get();
+
+            if (snap.exists) {
+                res.json({ ok: true, already: true, dateKey });
+                return;
+            }
+
+            await ref.set({
+                checkedAt: FieldValue.serverTimestamp(),
+                tz: "Asia/Tokyo",
+            });
+
+            res.json({ ok: true, already: false, dateKey });
+        } catch (e: any) {
+            res.status(401).json({ ok: false, error: e.message ?? String(e) });
         }
-
-        const uid = await requireAuth(req);
-        const dateKey = getDateKeyJST();
-
-        const db = getFirestore();
-        const ref = db.doc(`users/${uid}/checkins/${dateKey}`);
-        const snap = await ref.get();
-
-        if (snap.exists) {
-            res.json({ ok: true, already: true, dateKey });
-            return;
-        }
-
-        await ref.set({
-            checkedAt: FieldValue.serverTimestamp(),
-            tz: "Asia/Tokyo",
-        });
-
-        res.json({ ok: true, already: false, dateKey });
-    } catch (e: any) {
-        res.status(401).json({ ok: false, error: e.message ?? String(e) });
-    }
+    });
 });
 
 /** GET /status（今日押した？確認用） */
-export const status = onRequest(async (req, res) => {
-    try {
-        if (req.method !== "GET") {
-            res.status(405).send("Method Not Allowed");
-            return;
+export const status = onRequest((req, res) => {
+    corsHandler(req, res, async () => {
+        try {
+            if (req.method !== "GET") {
+                res.status(405).send("Method Not Allowed");
+                return;
+            }
+
+            const uid = await requireAuth(req);
+            const dateKey = getDateKeyJST();
+
+            const db = getFirestore();
+            const ref = db.doc(`users/${uid}/checkins/${dateKey}`);
+            const snap = await ref.get();
+
+            if (!snap.exists) {
+                res.json({ ok: true, dateKey, checked: false });
+                return;
+            }
+
+            const data = snap.data();
+            const checkedAtIso = data?.checkedAt?.toDate?.().toISOString?.() ?? null;
+
+            res.json({
+                ok: true,
+                dateKey,
+                checked: true,
+                checkedAt: checkedAtIso,
+            });
+        } catch (e: any) {
+            res.status(401).json({ ok: false, error: e.message ?? String(e) });
         }
-
-        const uid = await requireAuth(req);
-        const dateKey = getDateKeyJST();
-
-        const db = getFirestore();
-        const ref = db.doc(`users/${uid}/checkins/${dateKey}`);
-        const snap = await ref.get();
-
-        if (!snap.exists) {
-            res.json({ ok: true, dateKey, checked: false });
-            return;
-        }
-
-        const data = snap.data();
-        const checkedAtIso =
-            data?.checkedAt?.toDate?.().toISOString() ?? null;
-
-        res.json({
-            ok: true,
-            dateKey,
-            checked: true,
-            checkedAt: checkedAtIso,
-        });
-    } catch (e: any) {
-        res.status(401).json({ ok: false, error: e.message ?? String(e) });
-    }
+    });
 });
