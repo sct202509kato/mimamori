@@ -1,9 +1,14 @@
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import cors from "cors";
+import cors = require("cors");
 
-const corsHandler = cors({ origin: true });
+const corsHandler = cors({
+    origin: true,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type"],
+});
+
 
 admin.initializeApp();
 
@@ -29,6 +34,15 @@ async function requireAuth(req: any): Promise<string> {
 
 /** POST /checkin（今日も無事ボタン） */
 export const checkin = onRequest((req, res) => {
+    // ★ preflight 対応
+    if (req.method === "OPTIONS") {
+        res.set("Access-Control-Allow-Origin", "*");
+        res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+        res.set("Access-Control-Allow-Headers", "Authorization,Content-Type");
+        res.status(204).send("");
+        return;
+    }
+
     corsHandler(req, res, async () => {
         try {
             if (req.method !== "POST") {
@@ -62,6 +76,13 @@ export const checkin = onRequest((req, res) => {
 
 /** GET /status（今日押した？確認用） */
 export const status = onRequest((req, res) => {
+    if (req.method === "OPTIONS") {
+        res.set("Access-Control-Allow-Origin", "*");
+        res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+        res.set("Access-Control-Allow-Headers", "Authorization,Content-Type");
+        res.status(204).send("");
+        return;
+    }
     corsHandler(req, res, async () => {
         try {
             if (req.method !== "GET") {
